@@ -1,0 +1,299 @@
+<title>Argentina 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: full-screen satellite globe, one floating control panel (bottom sheet on phones). Single dark "orbit" look by design. */
+:root {
+  --space: #05070d;
+  --panel: rgba(10, 16, 28, 0.82);
+  --line: rgba(150, 190, 230, 0.18);
+  --ink: #e8eef6;
+  --muted: #8fa3bb;
+  --celeste: #74c3ef;      /* celeste de la bandera */
+  --sol: #f6b40e;          /* sol de mayo */
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--space); color: var(--ink); font-family: var(--body); overflow: hidden; }
+#globe { position: fixed; inset: 0; }
+#globe canvas { display: block; }
+
+.panel {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 16px);
+  left: max(16px, env(safe-area-inset-left, 0px));
+  width: 320px; max-height: calc(100% - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 16px; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--panel); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  z-index: 5;
+}
+.brand { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+h1 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 22px; letter-spacing: -0.01em; }
+h1 span { color: var(--celeste); }
+.coords { font-family: var(--mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.status { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.status b { color: var(--ink); font-weight: 600; }
+
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+button, .file {
+  font: 500 13px var(--body); color: var(--ink); cursor: pointer;
+  background: rgba(116, 195, 239, 0.08); border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 11px;
+}
+button:hover, .file:hover { border-color: var(--celeste); }
+button[aria-pressed="true"] { background: rgba(116, 195, 239, 0.22); border-color: var(--celeste); }
+button:focus-visible, .file:focus-within, input:focus-visible { outline: 2px solid var(--sol); outline-offset: 2px; }
+.file input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.file.primary { background: var(--sol); color: #1b1300; border-color: var(--sol); font-weight: 600; }
+
+.label { font: 500 11px var(--body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+#search { width: 100%; box-sizing: border-box; font: 14px var(--body); color: var(--ink); background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.list { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; }
+.list button { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; text-align: left; background: transparent; border-color: transparent; padding: 6px 8px; }
+.list button:hover { background: rgba(116, 195, 239, 0.08); }
+.list .n { font-family: var(--mono); font-size: 12px; color: var(--sol); font-variant-numeric: tabular-nums; }
+.list .bar { grid-column: 1 / -1; height: 2px; border-radius: 1px; background: var(--celeste); opacity: 0.55; }
+.hint { font-size: 12px; color: var(--muted); margin: 0; }
+.drop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(5,7,13,0.7); border: 2px dashed var(--sol); font: 700 20px var(--display); }
+
+.tip { font-family: var(--body); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.4; max-width: 240px; }
+.tip b { font-family: var(--display); font-size: 14px; }
+.tip .m { font-family: var(--mono); color: var(--muted); }
+
+.toggle { display: none; }
+@media (max-width: 640px) {
+  .panel {
+    top: auto; left: 0; right: 0; width: auto; bottom: 0;
+    max-height: 52%; border-radius: 16px 16px 0 0; border-bottom: 0;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  .panel.collapsed .collapsible { display: none; }
+  .toggle { display: inline-block; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div id="globe" aria-label="Globo terráqueo 3D con imagen satelital"></div>
+
+<aside class="panel" id="panel">
+  <div class="brand">
+    <h1>Argentina <span>3D</span></h1>
+    <button class="toggle" id="toggle" aria-expanded="true">Ocultar</button>
+  </div>
+  <div class="coords" id="coords">−38.42° S · 63.62° O</div>
+  <p class="status" id="status">Mostrando las <b>24 jurisdicciones</b> (capitales). Cargá el CSV o JSON de empresas para ver cuántas hay en cada provincia.</p>
+  <div class="row collapsible">
+    <label class="file primary">Cargar empresas<input type="file" id="file" accept=".csv,.json,text/csv,application/json"></label>
+    <button id="btn-ar">Argentina</button>
+    <button id="btn-world">Globo</button>
+    <button id="btn-spin" aria-pressed="false">Rotar</button>
+  </div>
+  <div class="collapsible" style="display:flex;flex-direction:column;gap:8px;min-height:0;flex:1 1 auto">
+    <label class="label" for="search">Ir a provincia</label>
+    <input id="search" type="search" placeholder="Córdoba, Mendoza, CABA…" autocomplete="off">
+    <ul class="list" id="list"></ul>
+  </div>
+  <p class="hint collapsible">Arrastrá para girar · rueda o pellizco para acercar · también podés soltar el archivo sobre el mapa.</p>
+</aside>
+<div class="drop" id="drop" hidden>Soltá el archivo de empresas</div>
+
+<script src="https://cdn.jsdelivr.net/npm/globe.gl@2.33.0/dist/globe.gl.min.js"></script>
+<script>
+// Capitales de las 24 jurisdicciones (lat, lng)
+const PROVINCES = [
+  ["Ciudad Autónoma de Buenos Aires","CABA",-34.6037,-58.3816],
+  ["Buenos Aires","La Plata",-34.9214,-57.9545],
+  ["Catamarca","S. F. del V. de Catamarca",-28.4696,-65.7795],
+  ["Chaco","Resistencia",-27.4514,-58.9867],
+  ["Chubut","Rawson",-43.3002,-65.1023],
+  ["Córdoba","Córdoba",-31.4201,-64.1888],
+  ["Corrientes","Corrientes",-27.4692,-58.8306],
+  ["Entre Ríos","Paraná",-31.7319,-60.5238],
+  ["Formosa","Formosa",-26.1775,-58.1781],
+  ["Jujuy","S. S. de Jujuy",-24.1858,-65.2995],
+  ["La Pampa","Santa Rosa",-36.6167,-64.2833],
+  ["La Rioja","La Rioja",-29.4131,-66.8558],
+  ["Mendoza","Mendoza",-32.8895,-68.8458],
+  ["Misiones","Posadas",-27.3671,-55.8961],
+  ["Neuquén","Neuquén",-38.9516,-68.0591],
+  ["Río Negro","Viedma",-40.8135,-62.9967],
+  ["Salta","Salta",-24.7821,-65.4232],
+  ["San Juan","San Juan",-31.5375,-68.5364],
+  ["San Luis","San Luis",-33.3017,-66.3378],
+  ["Santa Cruz","Río Gallegos",-51.6230,-69.2168],
+  ["Santa Fe","Santa Fe",-31.6333,-60.7000],
+  ["Santiago del Estero","Santiago del Estero",-27.7834,-64.2642],
+  ["Tierra del Fuego","Ushuaia",-54.8019,-68.3030],
+  ["Tucumán","S. M. de Tucumán",-26.8083,-65.2176],
+].map(([name, capital, lat, lng]) => ({ name, capital, lat, lng, count: 0, sample: [] }));
+
+const norm = s => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
+const ALIASES = { "caba": 0, "capital federal": 0, "ciudad de buenos aires": 0, "ciudad autonoma de buenos aires": 0, "cap fed": 0, "c a b a": 0, "pba": 1, "provincia de buenos aires": 1, "bs as": 1, "tierra del fuego antartida e islas del atlantico sur": 22 };
+const byKey = new Map(PROVINCES.map((p, i) => [norm(p.name), i]));
+function findProvince(v) {
+  const k = norm(v).replace(/^provincia de /, "");
+  if (!k) return null;
+  if (k in ALIASES) return PROVINCES[ALIASES[k]];
+  if (byKey.has(k)) return PROVINCES[byKey.get(k)];
+  for (const [key, i] of byKey) if (k.includes(key) || key.includes(k)) return PROVINCES[i];
+  return null;
+}
+
+// ---------- Globe ----------
+const el = document.getElementById("globe");
+const world = Globe({ animateIn: true })(el)
+  .globeImageUrl("earth.jpg")
+  .bumpImageUrl("topology.png")
+  .backgroundImageUrl("sky.png")
+  .showAtmosphere(true).atmosphereColor("#74c3ef").atmosphereAltitude(0.18)
+  .polygonCapColor(() => "rgba(116,195,239,0.06)")
+  .polygonSideColor(() => "rgba(116,195,239,0.15)")
+  .polygonStrokeColor(() => "#74c3ef")
+  .polygonAltitude(0.004)
+  .pointLat("lat").pointLng("lng")
+  .pointColor(d => d.kind === "company" ? "#ffffff" : "#f6b40e")
+  .pointRadius(d => d.kind === "company" ? 0.12 : 0.32)
+  .pointAltitude(d => d.kind === "company" ? 0.01 : d.alt)
+  .pointResolution(16)
+  .pointLabel(tip)
+  .onPointClick(d => flyTo(d, 0.45))
+  .labelLat("lat").labelLng("lng").labelText("label")
+  .labelSize(0.55).labelDotRadius(0).labelColor(() => "rgba(232,238,246,0.85)")
+  .labelResolution(2).labelAltitude(d => d.alt + 0.004);
+
+const ctl = world.controls();
+ctl.minDistance = 112;
+ctl.autoRotateSpeed = 0.35;
+
+function resize() { world.width(innerWidth).height(innerHeight); }
+addEventListener("resize", resize); resize();
+
+fetch("argentina.json").then(r => r.json()).then(g => world.polygonsData(g.features)).catch(() => {});
+
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
+function fmtLat(v) { return Math.abs(v).toFixed(2) + "° " + (v < 0 ? "S" : "N"); }
+function fmtLng(v) { return Math.abs(v).toFixed(2) + "° " + (v < 0 ? "O" : "E"); }
+function tip(d) {
+  if (d.kind === "company") return `<div class="tip"><b>${esc(d.name)}</b><br>${esc(d.city || "")}<br><span class="m">${fmtLat(d.lat)} · ${fmtLng(d.lng)}</span></div>`;
+  const s = d.sample.length ? "<br>" + d.sample.map(esc).join("<br>") + (d.count > d.sample.length ? "<br>…" : "") : "";
+  return `<div class="tip"><b>${esc(d.name)}</b><br>Capital: ${esc(d.capital)}<br>${loaded ? `<span style="color:#f6b40e">${d.count.toLocaleString("es-AR")} empresas</span>` : ""}${s}<br><span class="m">${fmtLat(d.lat)} · ${fmtLng(d.lng)}</span></div>`;
+}
+
+let loaded = false, companies = [];
+function render() {
+  const max = Math.max(1, ...PROVINCES.map(p => p.count));
+  PROVINCES.forEach(p => {
+    p.kind = "prov";
+    p.alt = loaded ? 0.01 + 0.35 * (p.count / max) : 0.015;
+    p.label = p.name === "Ciudad Autónoma de Buenos Aires" ? "CABA" : p.name;
+  });
+  world.pointsData([...PROVINCES, ...companies]).labelsData(PROVINCES);
+  renderList();
+}
+
+const list = document.getElementById("list"), search = document.getElementById("search");
+function renderList() {
+  const q = norm(search.value);
+  const max = Math.max(1, ...PROVINCES.map(p => p.count));
+  const items = PROVINCES.filter(p => !q || norm(p.name).includes(q) || norm(p.capital).includes(q))
+    .sort((a, b) => loaded ? b.count - a.count || a.name.localeCompare(b.name) : a.name.localeCompare(b.name));
+  list.replaceChildren(...items.map(p => {
+    const li = document.createElement("li"), b = document.createElement("button");
+    b.innerHTML = `<span>${esc(p.name)}</span><span class="n">${loaded ? p.count.toLocaleString("es-AR") : esc(p.capital)}</span>` +
+      (loaded ? `<span class="bar" style="width:${Math.max(2, 100 * p.count / max)}%"></span>` : "");
+    b.onclick = () => flyTo(p, 0.45);
+    li.append(b); return li;
+  }));
+}
+search.addEventListener("input", renderList);
+search.addEventListener("keydown", e => { if (e.key === "Enter") list.querySelector("button")?.click(); });
+
+function flyTo(p, altitude) { setSpin(false); world.pointOfView({ lat: p.lat, lng: p.lng, altitude }, 1600); }
+const AR = { lat: -38.4, lng: -63.6 };
+document.getElementById("btn-ar").onclick = () => flyTo(AR, 1.15);
+document.getElementById("btn-world").onclick = () => world.pointOfView({ ...AR, altitude: 2.6 }, 1600);
+const spinBtn = document.getElementById("btn-spin");
+function setSpin(on) { ctl.autoRotate = on; spinBtn.setAttribute("aria-pressed", String(on)); }
+spinBtn.onclick = () => setSpin(!ctl.autoRotate);
+
+const coords = document.getElementById("coords");
+ctl.addEventListener("change", () => { const v = world.pointOfView(); coords.textContent = `${fmtLat(v.lat)} · ${fmtLng(v.lng)} · alt ${Math.round(v.altitude * 6371).toLocaleString("es-AR")} km`; });
+
+const panel = document.getElementById("panel"), toggle = document.getElementById("toggle");
+toggle.onclick = () => { const c = panel.classList.toggle("collapsed"); toggle.textContent = c ? "Mostrar" : "Ocultar"; toggle.setAttribute("aria-expanded", String(!c)); };
+
+// ---------- Data loading ----------
+function parseCSV(text) {
+  const rows = []; let row = [], f = "", q = false;
+  const sep = (text.split("\n")[0].match(/;/g) || []).length > (text.split("\n")[0].match(/,/g) || []).length ? ";" : ",";
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+    else if (c === '"') q = true;
+    else if (c === sep) { row.push(f); f = ""; }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(f); rows.push(row); row = []; f = ""; }
+    else f += c;
+  }
+  if (f || row.length) { row.push(f); rows.push(row); }
+  const head = rows.shift().map(h => h.trim().toLowerCase());
+  return rows.filter(r => r.some(Boolean)).map(r => Object.fromEntries(head.map((h, i) => [h, r[i]])));
+}
+const pick = (o, keys) => { for (const k of keys) if (o[k] != null && o[k] !== "") return o[k]; };
+const status = document.getElementById("status");
+
+function ingest(records, source) {
+  PROVINCES.forEach(p => { p.count = 0; p.sample = []; });
+  companies = []; let unmatched = 0;
+  for (const raw of records) {
+    const o = Object.fromEntries(Object.entries(raw).map(([k, v]) => [String(k).toLowerCase().trim(), v]));
+    const name = pick(o, ["company_name", "razon_social", "nombre", "empresa", "denominacion", "name"]) || "(sin nombre)";
+    const city = pick(o, ["city", "localidad", "ciudad"]);
+    const lat = parseFloat(pick(o, ["lat", "latitude", "latitud"])), lng = parseFloat(pick(o, ["lng", "lon", "long", "longitude", "longitud"]));
+    const prov = findProvince(pick(o, ["province", "provincia"]));
+    if (prov) { prov.count++; if (prov.sample.length < 5) prov.sample.push(name); }
+    if (isFinite(lat) && isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) companies.push({ kind: "company", name, city, lat, lng });
+    else if (!prov) unmatched++;
+  }
+  loaded = true;
+  const total = records.length;
+  status.innerHTML = `<b>${total.toLocaleString("es-AR")} empresas</b> de ${esc(source)}. La altura de cada columna es la cantidad por provincia` +
+    (companies.length ? `; ${companies.length.toLocaleString("es-AR")} con coordenadas exactas (puntos blancos)` : "") +
+    (unmatched ? `. ${unmatched.toLocaleString("es-AR")} sin provincia reconocida.` : ".");
+  render();
+  flyTo(AR, 1.15);
+}
+
+async function loadFile(file) {
+  try {
+    const text = await file.text();
+    let rows;
+    if (/\.json$/i.test(file.name) || /^\s*[\[{]/.test(text)) {
+      const j = JSON.parse(text); rows = Array.isArray(j) ? j : (j.data || j.records || j.features?.map(f => ({ ...f.properties, lat: f.geometry?.coordinates?.[1], lng: f.geometry?.coordinates?.[0] })) || []);
+    } else rows = parseCSV(text);
+    if (!rows.length) throw new Error("El archivo no tiene filas.");
+    ingest(rows, file.name);
+  } catch (e) {
+    status.innerHTML = `No se pudo leer <b>${esc(file.name)}</b>: ${esc(e.message)} Probá con el CSV o JSON que genera <b>merge_official_data.py</b>.`;
+  }
+}
+document.getElementById("file").addEventListener("change", e => e.target.files[0] && loadFile(e.target.files[0]));
+const drop = document.getElementById("drop"); let dragDepth = 0;
+addEventListener("dragenter", e => { e.preventDefault(); dragDepth++; drop.hidden = false; });
+addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; drop.hidden = true; } });
+addEventListener("dragover", e => e.preventDefault());
+addEventListener("drop", e => { e.preventDefault(); dragDepth = 0; drop.hidden = true; const f = e.dataTransfer.files[0]; if (f) loadFile(f); });
+
+// Si la página se sirve desde el repo, intenta cargar el dataset generado por merge_official_data.py
+fetch("../data/argentina_companies_merged.json").then(r => r.ok ? r.json() : null).then(j => { if (Array.isArray(j) && j.length) ingest(j, "data/argentina_companies_merged.json"); }).catch(() => {});
+
+render();
+world.pointOfView({ ...AR, altitude: 2.6 });
+setTimeout(() => world.pointOfView({ ...AR, altitude: 1.15 }, 2400), 400);
+</script>
